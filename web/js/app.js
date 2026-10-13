@@ -73,18 +73,18 @@ function deckPage(id) {
   });
   const settings = deck.settings;
   const select = (label, key, opts) => h('label', {}, label,
-    h('select', { onchange: (e) => { settings[key] = e.target.value; store.save(); } },
+    h('select', { onchange: (e) => { settings[key] = e.target.value; store.save(deck); } },
       opts.map(([v, t]) => h('option', { value: v, selected: settings[key] === v }, t))));
 
   const rows = deck.cards.map((c) => h('tr', {},
     ['term', 'def'].map((f) => h('td', {}, h('input', {
       type: 'text', value: c[f], 'aria-label': f === 'term' ? 'Term' : 'Definition',
-      onchange: (e) => { c[f] = e.target.value.trim() || c[f]; store.save(); },
+      onchange: (e) => { c[f] = e.target.value.trim() || c[f]; store.save(deck); },
     }))),
     h('td', {}, h('span', { class: 'pill' }, STAGES[c.stage])),
     h('td', {}, h('button', {
       class: 'danger', 'aria-label': `Delete ${c.term}`,
-      onclick: () => { deck.cards = deck.cards.filter((x) => x !== c); store.save(); deckPage(id); },
+      onclick: () => { deck.cards = deck.cards.filter((x) => x !== c); store.save(deck); deckPage(id); },
     }, '✕'))));
 
   mount(
@@ -97,7 +97,7 @@ function deckPage(id) {
       select('Prompt', 'direction', [['mixed', 'Mixed'], ['term', 'Term → definition'], ['def', 'Definition → term']]),
       h('label', { class: 'row' }, h('input', {
         type: 'checkbox', checked: settings.strictAccents,
-        onchange: (e) => { settings.strictAccents = e.target.checked; store.save(); },
+        onchange: (e) => { settings.strictAccents = e.target.checked; store.save(deck); },
       }), 'Strict diacritics (ą, š, ž…)')),
     h('h2', {}, 'Add terms'),
     h('div', { class: 'card' }, paste,
@@ -130,12 +130,27 @@ function learn(id) {
   let current = null;
   let answered = false;
 
+  const saveSession = () => {
+    deck.session = queue.length ? { queue, missed: [...missed], stats: roundStats } : null;
+    store.save(deck);
+  };
+
   const startRound = () => {
+    const saved = deck.session;
+    const valid = saved?.queue.every((id) => deck.cards.some((c) => c.id === id));
+    if (saved?.queue.length && valid) {
+      queue = [...saved.queue];
+      roundStats = { ...saved.stats };
+      missed = new Set(saved.missed);
+      deck.session = null;
+      return next();
+    }
     const round = pickRound(deck.cards);
     if (!round.length) return finish();
     queue = round.map((c) => c.id);
     missed = new Set();
     roundStats = { right: 0, wrong: 0, total: round.length };
+    saveSession();
     next();
   };
 
@@ -150,7 +165,6 @@ function learn(id) {
   const record = (correct) => {
     const { card } = current;
     applyAnswer(card, correct);
-    store.save();
     queue.shift();
     if (correct) {
       roundStats.right++;
@@ -160,6 +174,7 @@ function learn(id) {
       current.requeued = Math.min(3, queue.length);
       queue.splice(current.requeued, 0, card.id);
     }
+    saveSession();
   };
 
   const header = () => h('div', {}, bar(deck.cards),
@@ -233,7 +248,7 @@ function learn(id) {
             missed.delete(c.id);
             c.misses = Math.max(0, c.misses - 1);
             applyAnswer(c, true);
-            store.save();
+            saveSession();
             next();
           },
         }, 'I was right')
@@ -276,12 +291,22 @@ function learn(id) {
 function route() {
   cleanup();
   cleanup = () => {};
-  store.load();
   const [, page, id] = location.hash.split('/');
   if (page === 'deck') deckPage(id);
   else if (page === 'learn') learn(id);
   else home();
 }
 
+const LABELS = { synced: 'Saved', pending: 'Saving…', offline: 'Offline, will retry', local: '' };
+const badge = h('span', { class: 'muted', role: 'status' });
+document.querySelector('header').insertBefore(badge, nav);
+store.watchStatus((s) => { badge.textContent = LABELS[s]; });
+
 addEventListener('hashchange', route);
+addEventListener('online', store.retryPending);
+store.load();
+if (!store.decks().length) await store.sync();
 route();
+store.sync().then(() => {
+  if (!location.hash.startsWith('#/learn')) route();
+});

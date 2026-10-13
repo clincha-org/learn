@@ -1,6 +1,6 @@
 # Learn
 
-Vocabulary trainer with adaptive study rounds. Static site, no backend: sets and progress live in the browser's `localStorage`, with JSON export/import for backup and moving between devices.
+Vocabulary trainer with adaptive study rounds. Sets, progress and in-progress rounds are saved to the server (one JSON file per set under `DATA_DIR/decks`), so they follow you across devices. The browser keeps a local copy and retries when offline; the newest edit to a set wins. JSON export/import is there for backups.
 
 ## How a session works
 
@@ -23,7 +23,7 @@ obuolys	apple
 ## Development
 
 ```
-python3 -m http.server -d web
+DATA_DIR=./data node server.js
 npm test
 ```
 
