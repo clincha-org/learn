@@ -64,3 +64,5 @@ td input { padding: .3rem .5rem; }
 .center { text-align: center; }
 .stat { font-size: 2.2rem; font-weight: 700; }
 .pill { font-size: .75rem; padding: .1rem .5rem; border-radius: 999px; background: var(--line); }
+button kbd { font: inherit; font-size: .8rem; opacity: .7; border: 1px solid currentColor; border-radius: 5px; padding: 0 .35rem; }
+.hint { margin: .5rem 0 0; }

@@ -211,8 +211,10 @@ function learn(id) {
       resolve(right ? 'correct' : 'wrong', o);
     };
     current.pick = (i) => q.options[i] != null && !answered && pick(q.options[i]);
+    current.skip = () => !answered && pick(null);
     return h('div', {}, h('div', { class: 'options' }, opts),
-      h('p', { class: 'center' }, h('button', { onclick: () => !answered && pick(null) }, "Don't know")));
+      h('p', { class: 'center' }, h('button', { onclick: current.skip }, h('kbd', {}, '0'), " Don't know")),
+      h('p', { class: 'hint' }, `Press 1–${q.options.length} to answer, 0 if you don't know, Enter to continue`));
   }
 
   function writeUi(q) {
@@ -238,7 +240,7 @@ function learn(id) {
     const card = root.querySelector('.card');
     card.append(fb);
     const row = h('div', { class: 'row' },
-      h('button', { class: 'primary', id: 'continue', onclick: () => next() }, 'Continue'),
+      h('button', { class: 'primary', id: 'continue', onclick: () => next() }, 'Continue ', h('kbd', {}, '↵')),
       result === 'wrong' && q.kind === 'write' && given
         ? h('button', {
           onclick: () => {
@@ -279,9 +281,18 @@ function learn(id) {
   }
 
   const onKey = (e) => {
-    if (e.target.tagName === 'BUTTON' || (e.target.tagName === 'INPUT' && e.target.type === 'text')) return;
-    if (/^[1-4]$/.test(e.key) && current?.pick) current.pick(Number(e.key) - 1);
-    else if (e.key === 'Enter' && answered) next();
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && t.type === 'text')) return;
+    const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code)?.[1];
+    if (digit !== undefined && current?.pick && !answered) {
+      e.preventDefault();
+      if (digit === '0') current.skip();
+      else current.pick(Number(digit) - 1);
+    } else if ((e.key === 'Enter' || e.key === ' ') && answered && t.tagName !== 'BUTTON') {
+      e.preventDefault();
+      next();
+    }
   };
   document.addEventListener('keydown', onKey);
   cleanup = () => document.removeEventListener('keydown', onKey);
